@@ -12,3 +12,5 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <asm-generic/socket.h>
+#include <sys/errno.h>
+#include <fcntl.h>
