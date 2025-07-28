@@ -1,61 +1,17 @@
 #include "settings.h"
 
-// 检查epoll问价描述符是否成功创建
-void epollcreate_check()
-{
-    if (epoll_fd == -1)
-    {
-        printf("epoll创建失败\n");
-        close(server_fd);
-        close(epoll_fd);
-        exit(EXIT_FAILURE);
-    }
-}
-
-// 检查opollwait是否出错
-void epollwait_check(int evnum)
-{
-    if (evnum == -1)
-    {
-        perror("epollwait出错");
-        close(server_fd);
-        close(epoll_fd);
-        exit(EXIT_FAILURE);
-    }
-}
-
 // 检查服务套接字是否成功创建
-void server_init_check()
-{
-    if (server_fd == -1)
-    {
-        perror("服务器套接字初始化失败");
-        close(server_fd);
-        exit(EXIT_FAILURE);
-    }
-}
-
+void server_init_check();
+// 初始化服务套接字
+struct sockaddr_in bind_init(struct sockaddr_in addr);
 // 检查是否成功绑定地址
-void bind_check(int re)
-{
-    if (re == -1)
-    {
-        perror("绑定失败");
-        close(server_fd);
-        exit(EXIT_FAILURE);
-    }
-}
-
+void bind_check(int re);
 // 检查是否成功能监听
-void listen_check(int re)
-{
-    if (re == -1)
-    {
-        perror("监听启动失败");
-        close(server_fd);
-        exit(EXIT_FAILURE);
-    }
-}
+void listen_check(int re);
+// 检查epoll问价描述符是否成功创建
+void epollcreate_check();
+// 检查opollwait是否出错
+void epollwait_check(int evnum);
 
 // 线程函数
 void *work_thread(void *arg)
@@ -110,9 +66,7 @@ int main(int argc, char const *argv[])
 
     // 设置地址参数（用于绑定）
     struct sockaddr_in addr;
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(9000);
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr = bind_init(addr);
 
     // 端口复用
     int opt = 1; // 1 启用，0 禁用
@@ -123,7 +77,7 @@ int main(int argc, char const *argv[])
 
     // 监听
     listen_check(listen(server_fd, 4096));
-    printf("服务器启动.....\n");
+    printf("服务器在%d端口上启动.....\n", PROT);
 
     // 建立线程池来实现多线程
     pthread_t pthreadpools[PTHREADMAX];
@@ -171,7 +125,6 @@ int main(int argc, char const *argv[])
             {
                 // 客户端
                 // 边缘触发模式必须循环读取！
-                // 修改读取循环
                 while (1)
                 {
                     char buf[BUFSIZE]; // 改为栈上分配，避免内存管理问题
