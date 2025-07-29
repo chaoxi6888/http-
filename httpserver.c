@@ -12,6 +12,10 @@ void listen_check(int re);
 void epollcreate_check();
 // 检查opollwait是否出错
 void epollwait_check(int evnum);
+// 根据文件扩展名获取Content-Type
+const char *get_content_type(const char *filename);
+// 解析HTTP请求，获取请求的文件路径
+int parse_http_request(const char *request, char *filename, size_t max_len);
 
 // 线程函数
 void *work_thread(void *arg)
@@ -27,8 +31,23 @@ void *work_thread(void *arg)
         Task task = task_queue[--task_count];
         pthread_mutex_unlock(&mutex);
 
-        // 处理http请求
-        const char *filename = "index.html"; // 要发送的文件
+        // 解析HTTP请求
+        char filename[256] = {0};
+        if (parse_http_request(task.buf, filename, sizeof(filename)) != 0)
+        {
+            const char *bad_request =
+                "HTTP/1.1 400 Bad Request\r\n"
+                "Content-Type: text/plain\r\n"
+                "Content-Length: 15\r\n"
+                "Connection: close\r\n\r\n"
+                "Bad Request";
+            write(task.fd, bad_request, strlen(bad_request));
+            close(task.fd);
+            free(task.buf);
+            continue;
+        }
+
+        // 打开请求的文件
         int file_fd = open(filename, O_RDONLY);
         if (file_fd == -1)
         {
@@ -44,6 +63,7 @@ void *work_thread(void *arg)
             free(task.buf);
             continue;
         }
+
         struct stat file_stat;
         if (fstat(file_fd, &file_stat) == -1)
         {
@@ -53,13 +73,18 @@ void *work_thread(void *arg)
             free(task.buf);
             continue; // 不终止线程
         }
+
+        // 获取Content-Type
+        const char *content_type = get_content_type(filename);
+
         char response_header[512];
         int header_len = snprintf(response_header, sizeof(response_header),
                                   "HTTP/1.1 200 OK\r\n"
-                                  "Content-Type:text/html\r\n"
-                                  "Content-Length:%ld\r\n"
-                                  "Connection:close\r\n\r\n",
-                                  file_stat.st_size);
+                                  "Content-Type: %s\r\n"
+                                  "Content-Length: %ld\r\n"
+                                  "Connection: close\r\n\r\n",
+                                  content_type, file_stat.st_size);
+
         // 发送响应头
         ssize_t sent = write(task.fd, response_header, header_len);
         if (sent != header_len)
@@ -70,10 +95,11 @@ void *work_thread(void *arg)
             free(task.buf);
             continue;
         }
+
         // 分块发送文件内容（优化大文件传输）
         off_t offset = 0;
         size_t remaining = file_stat.st_size;
-        const size_t CHUNK_SIZE = 1 << 20; // 1MB分块
+        const size_t CHUNK_SIZE = 1 << 20; // 1MB分块 2^20B = 1MB
 
         while (remaining > 0)
         {
@@ -88,12 +114,13 @@ void *work_thread(void *arg)
                     usleep(10000);
                     continue;
                 }
-                perror("sendfile error");
+                perror("文件发送失败");
                 break;
             }
 
             remaining -= bytes_sent;
         }
+
         close(file_fd);
         close(task.fd);
         free(task.buf);
@@ -182,6 +209,7 @@ int main(int argc, char const *argv[])
                 socklen_t c_len = sizeof(caddr);
                 int c_fd = accept(server_fd, (struct sockaddr *)&caddr, &c_len);
                 fcntl(c_fd, F_SETFL, O_NONBLOCK); // 必须设置为非阻塞！
+                printf("新的客户端连接%s:%d\n", inet_ntoa(caddr.sin_addr), htons(caddr.sin_port));
                 // 将产生的客户端文件描述符加入epoll实例
                 struct epoll_event ev;
                 ev.events = EPOLLIN | EPOLLET;
@@ -223,6 +251,7 @@ int main(int argc, char const *argv[])
     }
 
     // 关闭服务器
+
     close(epoll_fd);
     close(server_fd);
     return EXIT_SUCCESS;

@@ -86,3 +86,71 @@ void epollwait_check(int evnum)
         exit(EXIT_FAILURE);
     }
 }
+
+// 根据文件扩展名获取Content-Type
+const char *get_content_type(const char *filename)
+{
+    const char *dot = strrchr(filename, '.');
+    if (!dot)
+        return "application/octet-stream";
+
+    if (strcmp(dot, ".html") == 0 || strcmp(dot, ".htm") == 0)
+        return "text/html";
+    if (strcmp(dot, ".txt") == 0)
+        return "text/plain";
+    if (strcmp(dot, ".css") == 0)
+        return "text/css";
+    if (strcmp(dot, ".js") == 0)
+        return "application/javascript";
+    if (strcmp(dot, ".json") == 0)
+        return "application/json";
+    if (strcmp(dot, ".jpg") == 0 || strcmp(dot, ".jpeg") == 0)
+        return "image/jpeg";
+    if (strcmp(dot, ".png") == 0)
+        return "image/png";
+    if (strcmp(dot, ".gif") == 0)
+        return "image/gif";
+    if (strcmp(dot, ".ico") == 0)
+        return "image/x-icon";
+    if (strcmp(dot, ".pdf") == 0)
+        return "application/pdf";
+    if (strcmp(dot, ".zip") == 0)
+        return "application/zip";
+
+    return "application/octet-stream";
+}
+
+// 解析HTTP请求，获取请求的文件路径
+int parse_http_request(const char *request, char *filename, size_t max_len)
+{
+    // 简单的解析：查找第一个空格和第二个空格之间的内容
+    const char *start = strchr(request, ' ');
+    if (!start)
+        return -1;
+
+    start++; // 跳过第一个空格
+    const char *end = strchr(start, ' ');
+    if (!end)
+        return -1;
+
+    size_t len = end - start;
+    if (len >= max_len)
+        return -1;
+
+    memcpy(filename, start, len);
+    filename[len] = '\0';
+
+    // 如果请求的是根目录，返回默认文件
+    if (strcmp(filename, "/") == 0)
+    {
+        strncpy(filename, "/index.html", max_len);
+    }
+
+    // 去掉开头的斜杠，因为我们要从当前目录查找文件
+    if (filename[0] == '/')
+    {
+        memmove(filename, filename + 1, strlen(filename));
+    }
+
+    return 0;
+}
