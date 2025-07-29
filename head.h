@@ -14,3 +14,6 @@
 #include <asm-generic/socket.h>
 #include <sys/errno.h>
 #include <fcntl.h>
+#include <sys/sendfile.h> // sendfile头文件
+#include <sys/stat.h>     // 使用struct stat的头文件
+#include <sys/param.h>    // 使用MIN的头文件

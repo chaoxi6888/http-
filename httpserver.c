@@ -27,9 +27,76 @@ void *work_thread(void *arg)
         Task task = task_queue[--task_count];
         pthread_mutex_unlock(&mutex);
 
-        // 处理任务
-        write(task.fd, task.buf, task.len);
-        free(task.buf); // 必须释放内存！
+        // 处理http请求
+        const char *filename = "index.html"; // 要发送的文件
+        int file_fd = open(filename, O_RDONLY);
+        if (file_fd == -1)
+        {
+            // 文件不存在时返回404
+            const char *not_found =
+                "HTTP/1.1 404 Not Found\r\n"
+                "Content-Type: text/plain\r\n"
+                "Content-Length: 13\r\n"
+                "Connection: close\r\n\r\n"
+                "File not found";
+            write(task.fd, not_found, strlen(not_found));
+            close(task.fd);
+            free(task.buf);
+            continue;
+        }
+        struct stat file_stat;
+        if (fstat(file_fd, &file_stat) == -1)
+        {
+            perror("获取被请求文件失败");
+            close(file_fd);
+            close(task.fd);
+            free(task.buf);
+            continue; // 不终止线程
+        }
+        char response_header[512];
+        int header_len = snprintf(response_header, sizeof(response_header),
+                                  "HTTP/1.1 200 OK\r\n"
+                                  "Content-Type:text/html\r\n"
+                                  "Content-Length:%ld\r\n"
+                                  "Connection:close\r\n\r\n",
+                                  file_stat.st_size);
+        // 发送响应头
+        ssize_t sent = write(task.fd, response_header, header_len);
+        if (sent != header_len)
+        {
+            perror("发送响应头失败");
+            close(file_fd);
+            close(task.fd);
+            free(task.buf);
+            continue;
+        }
+        // 分块发送文件内容（优化大文件传输）
+        off_t offset = 0;
+        size_t remaining = file_stat.st_size;
+        const size_t CHUNK_SIZE = 1 << 20; // 1MB分块
+
+        while (remaining > 0)
+        {
+            size_t send_size = MIN(CHUNK_SIZE, remaining);
+            ssize_t bytes_sent = sendfile(task.fd, file_fd, &offset, send_size);
+
+            if (bytes_sent <= 0)
+            {
+                if (errno == EAGAIN || errno == EWOULDBLOCK)
+                {
+                    // 网络缓冲区满，短暂等待后重试
+                    usleep(10000);
+                    continue;
+                }
+                perror("sendfile error");
+                break;
+            }
+
+            remaining -= bytes_sent;
+        }
+        close(file_fd);
+        close(task.fd);
+        free(task.buf);
     }
     return NULL;
 }
@@ -43,7 +110,7 @@ void add_task(int fd, char *buf, int len)
         char *task_buf = (char *)malloc(len);
         if (task_buf == NULL)
         {
-            perror("malloc failed");
+            perror("add_task,malloc分配失败\n");
             pthread_mutex_unlock(&mutex);
             return;
         }
@@ -146,7 +213,7 @@ int main(int argc, char const *argv[])
                     }
                     else
                     {
-                        perror("read error");
+                        perror("客户端读取失败\n");
                         close(fd);
                         break;
                     }
