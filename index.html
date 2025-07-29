@@ -1,22 +1,325 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-CN">
 
 <head>
-    <meta name="Keywords" content="张三,简历,C/C++开发,嵌入式开发">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>张三 - 简历</title>
+    <title>音乐推荐 - 发现好音乐</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Arial', sans-serif;
+        }
+
+        body {
+            background-color: #121212;
+            color: #ffffff;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* 侧边栏样式 */
+        .sidebar {
+            width: 240px;
+            background-color: #000000;
+            padding: 20px;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 30px;
+            color: #1DB954;
+        }
+
+        .nav-menu {
+            list-style: none;
+        }
+
+        .nav-item {
+            padding: 10px 0;
+            cursor: pointer;
+        }
+
+        .nav-item:hover {
+            color: #1DB954;
+        }
+
+        /* 主内容区样式 */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .top-bar {
+            padding: 20px;
+            background-color: #181818;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .search-bar {
+            background-color: #2A2A2A;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 20px;
+            color: white;
+            width: 300px;
+        }
+
+        .content-area {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .section-title {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+
+        .playlist-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 20px;
+        }
+
+        .playlist-card {
+            background-color: #282828;
+            padding: 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .playlist-card:hover {
+            background-color: #383838;
+        }
+
+        .playlist-cover {
+            width: 100%;
+            aspect-ratio: 1;
+            background-color: #333;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+
+        .playlist-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .playlist-description {
+            font-size: 12px;
+            color: #b3b3b3;
+        }
+
+        /* 播放器控制栏样式 */
+        .player-bar {
+            height: 80px;
+            background-color: #181818;
+            border-top: 1px solid #282828;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+        }
+
+        .player-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .control-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .play-btn {
+            background-color: white;
+            color: black;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .progress-container {
+            flex: 1;
+            margin: 0 20px;
+        }
+
+        .progress-bar {
+            height: 4px;
+            background-color: #4d4d4d;
+            border-radius: 2px;
+            cursor: pointer;
+        }
+
+        .progress {
+            height: 100%;
+            background-color: #1DB954;
+            width: 30%;
+            border-radius: 2px;
+        }
+
+        .time-display {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #b3b3b3;
+            margin-top: 5px;
+        }
+
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+    </style>
 </head>
-<h1>张三</h1>
-<h3>C/C++ || 嵌入式开发</h3>
-<hr>
-<div>电子邮件:<a href="mailto:zhang@qq.com">zhang@qq.com</a></div>
-<div>手机号码:<a href="tel:+18692349818">186-9234-9818</a></div>
-<div>个人作品:<a href="https://github.com/">github</a></div>
-<div>个人简历:<a href="img/jianli.png">点击查看个人简历</a></div>
 
 <body>
+    <div class="container">
+        <!-- 侧边栏 -->
+        <div class="sidebar">
+            <div class="logo">音乐推荐</div>
+            <ul class="nav-menu">
+                <li class="nav-item">首页</li>
+                <li class="nav-item">发现</li>
+                <li class="nav-item">我的音乐</li>
+                <li class="nav-item">收藏</li>
+                <li class="nav-item">创建的歌单</li>
+                <li class="nav-item">喜欢的音乐</li>
+            </ul>
+        </div>
 
+        <!-- 主内容区 -->
+        <div class="main-content">
+            <div class="top-bar">
+                <div class="player-controls">
+                    <button class="control-btn">←</button>
+                    <button class="control-btn">→</button>
+                </div>
+                <input type="text" class="search-bar" placeholder="搜索歌曲、歌手或专辑">
+                <div class="user-profile">用户</div>
+            </div>
+
+            <div class="content-area">
+                <h2 class="section-title">推荐歌单</h2>
+                <div class="playlist-grid">
+                    <div class="playlist-card">
+                        <div class="playlist-cover"></div>
+                        <div class="playlist-name">每日推荐</div>
+                        <div class="playlist-description">根据你的口味生成</div>
+                    </div>
+                    <div class="playlist-card">
+                        <div class="playlist-cover"></div>
+                        <div class="playlist-name">热门榜单</div>
+                        <div class="playlist-description">全网最热歌曲</div>
+                    </div>
+                    <div class="playlist-card">
+                        <div class="playlist-cover"></div>
+                        <div class="playlist-name">私人雷达</div>
+                        <div class="playlist-description">专属于你的推荐</div>
+                    </div>
+                    <div class="playlist-card">
+                        <div class="playlist-cover"></div>
+                        <div class="playlist-name">工作专注</div>
+                        <div class="playlist-description">提升工作效率</div>
+                    </div>
+                    <div class="playlist-card">
+                        <div class="playlist-cover"></div>
+                        <div class="playlist-name">运动能量</div>
+                        <div class="playlist-description">健身必备歌单</div>
+                    </div>
+                </div>
+
+                <h2 class="section-title" style="margin-top: 30px;">最近播放</h2>
+                <div class="playlist-grid">
+                    <!-- 周杰伦 - 七里香 -->
+                    <div class="playlist-card">
+                        <a href="img/29-7-2025_161937_baike.baidu.com.jpeg" target="_blank">
+                            <div class="playlist-cover">
+                                <img src="img/29-7-2025_161937_baike.baidu.com.jpeg" alt="封面"
+                                    style="width: 100%; height: auto; max-height: 180px; object-fit: cover;">
+                            </div>
+                        </a>
+                        <div class="playlist-name">周杰伦 - 七里香</div>
+                        <div class="playlist-description">专辑: 七里香</div>
+                    </div>
+
+                    <!-- 林俊杰 - 不为谁而作的歌 -->
+                    <div class="playlist-card">
+                        <a href="img/29-7-2025_162122_pic.baike.soso.com.jpeg" target="_blank">
+                            <div class="playlist-cover">
+                                <img src="img/29-7-2025_162122_pic.baike.soso.com.jpeg" alt="封面"
+                                    style="width: 100%; height: auto; max-height: 180px; object-fit: cover;">
+                            </div>
+                        </a>
+                        <div class="playlist-name">林俊杰 - 不为谁而作的歌</div>
+                        <div class="playlist-description">专辑: 和自己对话</div>
+                    </div>
+
+                    <!-- Taylor Swift - Blank Space -->
+                    <div class="playlist-card">
+                        <a href="img/29-7-2025_163628_baike.baidu.com.jpeg" target="_blank">
+                            <div class="playlist-cover">
+                                <img src="img/29-7-2025_163628_baike.baidu.com.jpeg" alt="封面"
+                                    style="width: 100%; height: auto; max-height: 180px; object-fit: cover;">
+                            </div>
+                        </a>
+                        <div class="playlist-name">Taylor Swift - Blank Space</div>
+                        <div class="playlist-description">专辑: 1989</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 播放器控制栏 -->
+            <div class="player-bar">
+                <div class="now-playing">
+                    <div class="song-info">
+                        <div class="song-name">七里香</div>
+                        <div class="artist-name">周杰伦</div>
+                    </div>
+                </div>
+
+                <div class="player-controls" style="flex: 1; justify-content: center;">
+                    <button class="control-btn">⏮</button>
+                    <button class="control-btn play-btn">▶</button>
+                    <button class="control-btn">⏭</button>
+                </div>
+
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress"></div>
+                    </div>
+                    <div class="time-display">
+                        <span>1:23</span>
+                        <span>4:32</span>
+                    </div>
+                </div>
+
+                <div class="volume-control">
+                    <button class="control-btn">🔊</button>
+                    <input type="range" min="0" max="100" value="80" class="volume-slider">
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>
