@@ -107,18 +107,20 @@ void *work_thread(void *arg)
 
         while (remaining > 0)
         {
-            size_t send_size = MIN(CHUNK_SIZE, remaining);
-            ssize_t bytes_sent = sendfile(task.fd, file_fd, &offset, send_size);
+            size_t send_size = MIN(CHUNK_SIZE, remaining);                       // 本次要发送的大小
+            ssize_t bytes_sent = sendfile(task.fd, file_fd, &offset, send_size); // 实际发送大小
 
             if (bytes_sent <= 0)
             {
+                // EWOULDBLOCK 表示“如果是阻塞IO，这次操作会阻塞；但现在是非阻塞IO，所以直接返回错误”。
                 if (errno == EAGAIN || errno == EWOULDBLOCK)
                 {
                     // 网络缓冲区满，短暂等待后重试
                     usleep(10000);
+                    printf("文件发送失败，再次尝试.....\n");
                     continue;
                 }
-                perror("文件发送失败");
+                printf("文件发送失败\n");
                 break;
             }
 
@@ -230,7 +232,7 @@ int main(int argc, char const *argv[])
                         close(fd);
                         break;
                     }
-                    else if (errno == EAGAIN) // errno == EAGAIN, read返回一
+                    else if (errno == EAGAIN)
                     {
                         break; // ET模式下数据已读完
                     }
