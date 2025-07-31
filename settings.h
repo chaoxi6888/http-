@@ -120,15 +120,82 @@ const char *get_content_type(const char *filename)
     return "application/octet-stream";
 }
 
-// 解析HTTP请求，获取请求的文件路径
+// URL解码函数
+void url_decode(char *dst, const char *src)
+{
+    char a, b;
+    while (*src)
+    {
+        if ((*src == '%') &&
+            ((a = src[1]) && (b = src[2])) &&
+            (isxdigit(a) && isxdigit(b)))
+        {
+            if (a >= 'a')
+                a -= 'a' - 'A';
+            if (a >= 'A')
+                a -= ('A' - 10);
+            else
+                a -= '0';
+            if (b >= 'a')
+                b -= 'a' - 'A';
+            if (b >= 'A')
+                b -= ('A' - 10);
+            else
+                b -= '0';
+            *dst++ = 16 * a + b;
+            src += 3;
+        }
+        else
+        {
+            *dst++ = *src++;
+        }
+    }
+    *dst++ = '\0';
+}
+
+// // 解析HTTP请求，获取请求的文件路径
+// int parse_http_request(const char *request, char *filename, size_t max_len)
+// {
+//     // 简单的解析：查找第一个空格和第二个空格之间的内容
+//     const char *start = strchr(request, ' ');
+//     if (!start)
+//         return -1;
+
+//     start++; // 跳过第一个空格
+//     const char *end = strchr(start, ' ');
+//     if (!end)
+//         return -1;
+
+//     size_t len = end - start;
+//     if (len >= max_len)
+//         return -1;
+
+//     memcpy(filename, start, len);
+//     filename[len] = '\0';
+
+//     // 如果请求的是根目录，返回默认文件
+//     if (strcmp(filename, "/") == 0)
+//     {
+//         strncpy(filename, "/login.html", max_len);
+//     }
+
+//     // 去掉开头的斜杠，因为我们要从当前目录查找文件
+//     if (filename[0] == '/')
+//     {
+//         memmove(filename, filename + 1, strlen(filename));
+//     }
+
+//     return 0;
+// }
+
+// 修改后的解析函数
 int parse_http_request(const char *request, char *filename, size_t max_len)
 {
-    // 简单的解析：查找第一个空格和第二个空格之间的内容
     const char *start = strchr(request, ' ');
     if (!start)
         return -1;
 
-    start++; // 跳过第一个空格
+    start++;
     const char *end = strchr(start, ' ');
     if (!end)
         return -1;
@@ -137,16 +204,21 @@ int parse_http_request(const char *request, char *filename, size_t max_len)
     if (len >= max_len)
         return -1;
 
-    memcpy(filename, start, len);
-    filename[len] = '\0';
+    char encoded[256];
+    memcpy(encoded, start, len);
+    encoded[len] = '\0';
 
-    // 如果请求的是根目录，返回默认文件
+    // URL解码
+    url_decode(filename, encoded);
+
+    // 处理根路径请求
     if (strcmp(filename, "/") == 0)
     {
-        strncpy(filename, "/index.html", max_len);
+        strncpy(filename, "login.html", max_len);
+        return 0;
     }
 
-    // 去掉开头的斜杠，因为我们要从当前目录查找文件
+    // 去掉开头的斜杠（保留music/这样的前缀）
     if (filename[0] == '/')
     {
         memmove(filename, filename + 1, strlen(filename));

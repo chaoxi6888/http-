@@ -4,13 +4,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>音乐推荐 - 发现好音乐</title>
+    <title>音乐天堂 - 发现好音乐</title>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
             font-family: 'Arial', sans-serif;
+        }
+
+        .nav-menu a {
+            text-decoration: none;
+            color: inherit;
         }
 
         body {
@@ -37,6 +42,39 @@
             color: #1DB954;
         }
 
+        /* 播放按钮样式 */
+        .play-btn {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #1DB954;
+            color: white;
+            border: none;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+
+        .playlist-cover {
+            position: relative;
+            /* 添加这个让播放按钮可以绝对定位 */
+        }
+
+        .playlist-cover:hover .play-btn {
+            opacity: 1;
+        }
+
+        .play-btn.playing::after {
+            content: "❚❚";
+        }
+
         .nav-menu {
             list-style: none;
         }
@@ -48,6 +86,30 @@
 
         .nav-item:hover {
             color: #1DB954;
+        }
+
+        #progress-bar {
+            height: 4px;
+            background-color: #4d4d4d;
+            border-radius: 2px;
+            cursor: pointer;
+            margin-top: 5px;
+        }
+
+        #progress {
+            height: 100%;
+            background-color: #1DB954;
+            width: 0%;
+            border-radius: 2px;
+            transition: width 0.1s linear;
+        }
+
+        .time-display {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #b3b3b3;
+            margin-top: 5px;
         }
 
         /* 主内容区样式 */
@@ -198,9 +260,9 @@
         <div class="sidebar">
             <div class="logo">音乐推荐</div>
             <ul class="nav-menu">
-                <li class="nav-item">首页</li>
+                <li class="nav-item active"><a href="index.html">首页</a></li>
                 <li class="nav-item">发现</li>
-                <li class="nav-item">我的音乐</li>
+                <li class="nav-item active"><a href="mymusic.html">我的音乐</a></li>
                 <li class="nav-item">收藏</li>
                 <li class="nav-item">创建的歌单</li>
                 <li class="nav-item">喜欢的音乐</li>
@@ -252,36 +314,33 @@
                 <div class="playlist-grid">
                     <!-- 周杰伦 - 七里香 -->
                     <div class="playlist-card">
-                        <a href="img/29-7-2025_161937_baike.baidu.com.jpeg" target="_blank">
-                            <div class="playlist-cover">
-                                <img src="img/29-7-2025_161937_baike.baidu.com.jpeg" alt="封面"
-                                    style="width: 100%; height: auto; max-height: 180px; object-fit: cover;">
-                            </div>
-                        </a>
+                        <div class="playlist-cover">
+                            <img src="img/29-7-2025_161937_baike.baidu.com.jpeg" alt="封面"
+                                style="width: 100%; height: auto; max-height: 180px; object-fit: cover;">
+                            <button class="play-btn" data-audio="music/七里香.mp3">▶</button>
+                        </div>
                         <div class="playlist-name">周杰伦 - 七里香</div>
                         <div class="playlist-description">专辑: 七里香</div>
                     </div>
 
                     <!-- 林俊杰 - 不为谁而作的歌 -->
                     <div class="playlist-card">
-                        <a href="img/29-7-2025_162122_pic.baike.soso.com.jpeg" target="_blank">
-                            <div class="playlist-cover">
-                                <img src="img/29-7-2025_162122_pic.baike.soso.com.jpeg" alt="封面"
-                                    style="width: 100%; height: auto; max-height: 180px; object-fit: cover;">
-                            </div>
-                        </a>
+                        <div class="playlist-cover">
+                            <img src="img/29-7-2025_162122_pic.baike.soso.com.jpeg" alt="封面"
+                                style="width: 100%; height: auto; max-height: 180px; object-fit: cover;">
+                            <button class="play-btn" data-audio="music/不为谁而做的歌.mp3">▶</button>
+                        </div>
                         <div class="playlist-name">林俊杰 - 不为谁而作的歌</div>
                         <div class="playlist-description">专辑: 和自己对话</div>
                     </div>
 
                     <!-- Taylor Swift - Blank Space -->
                     <div class="playlist-card">
-                        <a href="img/29-7-2025_163628_baike.baidu.com.jpeg" target="_blank">
-                            <div class="playlist-cover">
-                                <img src="img/29-7-2025_163628_baike.baidu.com.jpeg" alt="封面"
-                                    style="width: 100%; height: auto; max-height: 180px; object-fit: cover;">
-                            </div>
-                        </a>
+                        <div class="playlist-cover">
+                            <img src="img/29-7-2025_163628_baike.baidu.com.jpeg" alt="封面"
+                                style="width: 100%; height: auto; max-height: 180px; object-fit: cover;">
+                            <button class="play-btn" data-audio="music/BlankSpace.mp3">▶</button>
+                        </div>
                         <div class="playlist-name">Taylor Swift - Blank Space</div>
                         <div class="playlist-description">专辑: 1989</div>
                     </div>
@@ -304,12 +363,12 @@
                 </div>
 
                 <div class="progress-container">
-                    <div class="progress-bar">
-                        <div class="progress"></div>
+                    <div class="progress-bar" id="progress-bar">
+                        <div class="progress" id="progress"></div>
                     </div>
                     <div class="time-display">
-                        <span>1:23</span>
-                        <span>4:32</span>
+                        <span id="current-time">0:00</span>
+                        <span id="duration">0:00</span>
                     </div>
                 </div>
 
@@ -320,6 +379,130 @@
             </div>
         </div>
     </div>
+    <audio id="audio-player" hidden></audio>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const audioPlayer = document.getElementById('audio-player');
+            let currentPlayingBtn = null;
+
+            // 获取进度条相关元素
+            const progress = document.getElementById('progress');
+            const progressBar = document.getElementById('progress-bar');
+            const currentTimeEl = document.getElementById('current-time');
+            const durationEl = document.getElementById('duration');
+
+            // 格式化时间为分钟:秒
+            function formatTime(seconds) {
+                const minutes = Math.floor(seconds / 60);
+                const secs = Math.floor(seconds % 60);
+                return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
+            }
+
+            // 更新进度条和时间的函数
+            function updateProgress() {
+                // 确保有有效时长
+                if (!isNaN(audioPlayer.duration)) {
+                    const progressPercent = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+                    progress.style.width = `${progressPercent}%`;
+                    currentTimeEl.textContent = formatTime(audioPlayer.currentTime);
+                    durationEl.textContent = formatTime(audioPlayer.duration);
+                }
+            }
+
+            // 点击进度条跳转
+            progressBar.addEventListener('click', function (e) {
+                if (!isNaN(audioPlayer.duration)) {
+                    const clickPosition = e.offsetX / this.offsetWidth;
+                    audioPlayer.currentTime = clickPosition * audioPlayer.duration;
+                }
+            });
+
+            // 为所有播放按钮添加点击事件
+            document.querySelectorAll('.play-btn').forEach(btn => {
+                btn.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    const audioUrl = this.getAttribute('data-audio');
+
+                    // 如果点击的是当前正在播放的按钮
+                    if (this === currentPlayingBtn) {
+                        if (audioPlayer.paused) {
+                            audioPlayer.play();
+                            this.classList.add('playing');
+                        } else {
+                            audioPlayer.pause();
+                            this.classList.remove('playing');
+                        }
+                        return;
+                    }
+
+                    // 停止当前播放
+                    if (currentPlayingBtn) {
+                        currentPlayingBtn.classList.remove('playing');
+                        audioPlayer.pause();
+                    }
+
+                    // 加载并播放新音频
+                    audioPlayer.src = audioUrl;
+                    audioPlayer.play()
+                        .then(() => {
+                            this.classList.add('playing');
+                            this.textContent = "❚❚";
+                            currentPlayingBtn = this;
+
+                            // 更新播放器信息
+                            const card = this.closest('.playlist-card');
+                            document.querySelector('.song-name').textContent =
+                                card.querySelector('.playlist-name').textContent;
+                            document.querySelector('.artist-name').textContent =
+                                card.querySelector('.playlist-description').textContent;
+
+                            // 添加事件监听
+                            audioPlayer.addEventListener('timeupdate', updateProgress);
+                            audioPlayer.addEventListener('ended', function () {
+                                if (currentPlayingBtn) {
+                                    currentPlayingBtn.classList.remove('playing');
+                                    currentPlayingBtn.textContent = "▶";
+                                    currentPlayingBtn = null;
+                                }
+                                progress.style.width = '0%';
+                                currentTimeEl.textContent = '0:00';
+                            });
+                        })
+                        .catch(error => {
+                            console.error("播放失败:", error);
+                            alert("无法播放音乐，请检查音乐文件路径");
+                        });
+                });
+            });
+
+            // 底部播放控制按钮事件
+            document.querySelector('.player-controls .play-btn').addEventListener('click', function () {
+                if (currentPlayingBtn) {
+                    currentPlayingBtn.click();
+                } else if (document.querySelector('.play-btn')) {
+                    // 如果没有正在播放的，点击第一个播放按钮
+                    document.querySelector('.play-btn').click();
+                }
+            });
+
+            // 上一首/下一首按钮示例（需要根据实际列表实现）
+            document.querySelector('.control-btn:nth-child(1)').addEventListener('click', function () {
+                // 实现上一首逻辑
+                console.log("上一首");
+            });
+
+            document.querySelector('.control-btn:nth-child(3)').addEventListener('click', function () {
+                // 实现下一首逻辑
+                console.log("下一首");
+            });
+
+            // 音量控制
+            const volumeSlider = document.querySelector('.volume-slider');
+            volumeSlider.addEventListener('input', function () {
+                audioPlayer.volume = this.value / 100;
+            });
+        });
+    </script>
 </body>
 
 </html>

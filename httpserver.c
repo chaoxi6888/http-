@@ -48,10 +48,31 @@ void *work_thread(void *arg)
         }
 
         // 打开请求的文件
-        int file_fd = open(filename, O_RDONLY);
+        // int file_fd = open(filename, O_RDONLY);
+        // if (file_fd == -1)
+        // {
+        //     // 文件不存在时返回404
+        //     const char *not_found =
+        //         "HTTP/1.1 404 Not Found\r\n"
+        //         "Content-Type: text/plain\r\n"
+        //         "Content-Length: 13\r\n"
+        //         "Connection: close\r\n\r\n"
+        //         "File not found";
+        //     write(task.fd, not_found, strlen(not_found));
+        //     close(task.fd);
+        //     free(task.buf);
+        //     continue;
+        // }
+
+        char fullpath[512] = {0};
+        snprintf(fullpath, sizeof(fullpath), "%s", filename); // 保留原始路径结构
+
+        int file_fd = open(fullpath, O_RDONLY);
         if (file_fd == -1)
         {
-            // 文件不存在时返回404
+            perror("open failed"); // 添加详细错误输出
+            printf("尝试打开的文件路径: %s\n", fullpath);
+            // ... 返回404 ...
             const char *not_found =
                 "HTTP/1.1 404 Not Found\r\n"
                 "Content-Type: text/plain\r\n"

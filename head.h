@@ -16,3 +16,4 @@
 #include <fcntl.h>
 #include <sys/sendfile.h> // sendfile头文件
 #include <sys/stat.h>     // 使用struct stat的头文件
+#include <ctype.h>
