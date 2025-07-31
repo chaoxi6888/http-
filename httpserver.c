@@ -22,13 +22,13 @@ void *work_thread(void *arg)
 {
     while (1)
     {
-        pthread_mutex_lock(&mutex);
+        pthread_mutex_lock(&mutex); // 因为task_count 发生改变所以上锁
         while (task_count == 0)
         {
             pthread_cond_wait(&cond, &mutex);
         }
 
-        Task task = task_queue[--task_count];
+        Task task = task_queue[--task_count]; // 结构体赋值
         pthread_mutex_unlock(&mutex);
 
         // 解析HTTP请求
@@ -43,29 +43,12 @@ void *work_thread(void *arg)
                 "Bad Request";
             write(task.fd, bad_request, strlen(bad_request));
             close(task.fd);
-            free(task.buf);
+            free(task.buf); // 释放掉主线程中分配的空间
             continue;
         }
 
-        // 打开请求的文件
-        // int file_fd = open(filename, O_RDONLY);
-        // if (file_fd == -1)
-        // {
-        //     // 文件不存在时返回404
-        //     const char *not_found =
-        //         "HTTP/1.1 404 Not Found\r\n"
-        //         "Content-Type: text/plain\r\n"
-        //         "Content-Length: 13\r\n"
-        //         "Connection: close\r\n\r\n"
-        //         "File not found";
-        //     write(task.fd, not_found, strlen(not_found));
-        //     close(task.fd);
-        //     free(task.buf);
-        //     continue;
-        // }
-
         char fullpath[512] = {0};
-        snprintf(fullpath, sizeof(fullpath), "%s", filename); // 保留原始路径结构
+        snprintf(fullpath, sizeof(fullpath), "%s", filename);
 
         int file_fd = open(fullpath, O_RDONLY);
         if (file_fd == -1)
@@ -88,7 +71,7 @@ void *work_thread(void *arg)
         struct stat file_stat;
         if (fstat(file_fd, &file_stat) == -1)
         {
-            perror("获取被请求文件失败");
+            perror("获取被请求文件信息失败");
             close(file_fd);
             close(task.fd);
             free(task.buf);
@@ -154,18 +137,9 @@ void add_task(int fd, char *buf, int len)
     pthread_mutex_lock(&mutex);
     if (task_count < 1024)
     {
-        // 深度复制数据到堆内存
-        char *task_buf = (char *)malloc(len);
-        if (task_buf == NULL)
-        {
-            perror("add_task,malloc分配失败\n");
-            pthread_mutex_unlock(&mutex);
-            return;
-        }
-        memcpy(task_buf, buf, len);
-
+        // 直接保存主线程传进来的buf指针
         task_queue[task_count].fd = fd;
-        task_queue[task_count].buf = task_buf;
+        task_queue[task_count].buf = buf;
         task_queue[task_count].len = len;
         task_count++;
         pthread_cond_signal(&cond);
@@ -247,7 +221,7 @@ int main(int argc, char const *argv[])
                     int n = read(fd, buf, BUFSIZE);
                     if (n > 0)
                     {
-                        char *task_buf = malloc(n);
+                        char *task_buf = malloc(n); // 分配新内存将内容传给线程
                         memcpy(task_buf, buf, n);
                         add_task(fd, task_buf, n);
                     }
@@ -256,7 +230,7 @@ int main(int argc, char const *argv[])
                         close(fd);
                         break;
                     }
-                    else if (errno == EAGAIN)
+                    else if (errno == EAGAIN) // errno == EAGAIN, read返回一
                     {
                         break; // ET模式下数据已读完
                     }
