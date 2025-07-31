@@ -137,7 +137,6 @@ void url_decode(char *dst, const char *src)
             ((a = src[1]) && (b = src[2])) && // 后面至少有两个字符
             (isxdigit(a) && isxdigit(b)))     // 这两个字符是十六进制数字（0-9, A-F, a-f）
         {
-
             a = hex_to_dec(a);
             b = hex_to_dec(b);
             *dst++ = 16 * a + b;
