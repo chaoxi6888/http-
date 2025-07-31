@@ -204,13 +204,13 @@
             const password = document.getElementById('password').value.trim();
 
             // 基础非空验证
-            if (username === 'chaoxi6888' || password === '314123') {
+            if (username === 'chaoxi6888' && password === '314123') {
                 // 验证通过，跳转到index.html
                 window.location.href = "index.html";
                 return false;
             }
 
-            if (!username || !password) {
+            if (!username && !password) {
                 alert('用户名和密码不能为空，请重新输入');
                 return false;
             }
