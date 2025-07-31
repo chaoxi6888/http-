@@ -90,7 +90,7 @@ void epollwait_check(int evnum)
 // 根据文件扩展名获取Content-Type
 const char *get_content_type(const char *filename)
 {
-    const char *dot = strrchr(filename, '.');
+    const char *dot = strrchr(filename, '.'); // 最后一个.后面的是文件后缀
     if (!dot)
         return "application/octet-stream";
 
@@ -120,28 +120,26 @@ const char *get_content_type(const char *filename)
     return "application/octet-stream";
 }
 
+// 十六进制数字转数字
+int hex_to_dec(char c)
+{
+    c = toupper(c);
+    return (c >= 'A') ? (c - 'A' + 10) : (c - '0');
+}
+
 // URL解码函数
 void url_decode(char *dst, const char *src)
 {
     char a, b;
     while (*src)
     {
-        if ((*src == '%') &&
-            ((a = src[1]) && (b = src[2])) &&
-            (isxdigit(a) && isxdigit(b)))
+        if ((*src == '%') &&                  // 当前字符是 '%'
+            ((a = src[1]) && (b = src[2])) && // 后面至少有两个字符
+            (isxdigit(a) && isxdigit(b)))     // 这两个字符是十六进制数字（0-9, A-F, a-f）
         {
-            if (a >= 'a')
-                a -= 'a' - 'A';
-            if (a >= 'A')
-                a -= ('A' - 10);
-            else
-                a -= '0';
-            if (b >= 'a')
-                b -= 'a' - 'A';
-            if (b >= 'A')
-                b -= ('A' - 10);
-            else
-                b -= '0';
+
+            a = hex_to_dec(a);
+            b = hex_to_dec(b);
             *dst++ = 16 * a + b;
             src += 3;
         }
@@ -153,42 +151,7 @@ void url_decode(char *dst, const char *src)
     *dst++ = '\0';
 }
 
-// // 解析HTTP请求，获取请求的文件路径
-// int parse_http_request(const char *request, char *filename, size_t max_len)
-// {
-//     // 简单的解析：查找第一个空格和第二个空格之间的内容
-//     const char *start = strchr(request, ' ');
-//     if (!start)
-//         return -1;
-
-//     start++; // 跳过第一个空格
-//     const char *end = strchr(start, ' ');
-//     if (!end)
-//         return -1;
-
-//     size_t len = end - start;
-//     if (len >= max_len)
-//         return -1;
-
-//     memcpy(filename, start, len);
-//     filename[len] = '\0';
-
-//     // 如果请求的是根目录，返回默认文件
-//     if (strcmp(filename, "/") == 0)
-//     {
-//         strncpy(filename, "/login.html", max_len);
-//     }
-
-//     // 去掉开头的斜杠，因为我们要从当前目录查找文件
-//     if (filename[0] == '/')
-//     {
-//         memmove(filename, filename + 1, strlen(filename));
-//     }
-
-//     return 0;
-// }
-
-// 修改后的解析函数
+// 解析函数
 int parse_http_request(const char *request, char *filename, size_t max_len)
 {
     const char *start = strchr(request, ' ');
@@ -218,7 +181,7 @@ int parse_http_request(const char *request, char *filename, size_t max_len)
         return 0;
     }
 
-    // 去掉开头的斜杠（保留music/这样的前缀）
+    // 去掉开头的斜杠
     if (filename[0] == '/')
     {
         memmove(filename, filename + 1, strlen(filename));
