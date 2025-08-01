@@ -3,6 +3,7 @@
 #define PTHREADMAX 10                     // 线程池子中最大数量
 #define MAXEVENTS 1024                    // epoll实例中事件的最大数量
 #define BUFSIZE 1024                      // 缓存区大小
+#define MAX_CLIENTS 10240                 // 最大客户端的数量
 #define PROT 9000                         // 服务器端口号
 #define MIN(x, y) ((x) < (y) ? (x) : (y)) // 定义MIN宏
 
@@ -16,10 +17,18 @@ typedef struct
     int len;
 } Task;
 
+typedef struct
+{
+    int fd;
+    char ip[INET_ADDRSTRLEN];
+    int port;
+} ClientInfo;
+
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 Task task_queue[1024];
 int task_count = 0;
+ClientInfo client_infos[MAX_CLIENTS];
 
 // 检查服务套接字是否成功创建
 void server_init_check()
