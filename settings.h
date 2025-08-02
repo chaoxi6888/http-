@@ -1,11 +1,12 @@
 #include "head.h"
-
-#define PTHREADMAX 10                     // 线程池子中最大数量
-#define MAXEVENTS 1024                    // epoll实例中事件的最大数量
+#define LISTENMAX 4096
+#define PTHREADMAX 4                      // 线程池子中最大数量
+#define MAXEVENTS 100                     // epoll实例中事件的最大数量
 #define BUFSIZE 1024                      // 缓存区大小
-#define MAX_CLIENTS 10240                 // 最大客户端的数量
+#define MAX_CLIENTS 1024                  // 最大客户端的数量
 #define PROT 9000                         // 服务器端口号
 #define MIN(x, y) ((x) < (y) ? (x) : (y)) // 定义MIN宏
+volatile int server_running = 1;          // 全局标志，比int更安全
 
 int server_fd; // 服务器套接字的文件描述符
 int epoll_fd;  // epoll的文件描述符
@@ -22,7 +23,7 @@ typedef struct
     int fd;
     char ip[INET_ADDRSTRLEN];
     int port;
-} ClientInfo;
+} ClientInfo; // 客户端信息
 
 pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER; // 日志锁
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -199,6 +200,27 @@ int parse_http_request(const char *request, char *filename, size_t max_len)
     return 0;
 }
 
+// 获取ip地址
+char *get_real_ip(const char *request, const char *default_ip)
+{
+    static char ipbuf[64];
+    const char *p = strstr(request, "X-Forwarded-For:");
+    if (p)
+    {
+        p += strlen("X-Forwarded-For:");
+        while (*p == ' ')
+            p++; // 跳过空格
+        int i = 0;
+        while (*p && *p != '\r' && *p != '\n' && *p != ',' && i < 63)
+        {
+            ipbuf[i++] = *p++;
+        }
+        ipbuf[i] = '\0';
+        return ipbuf;
+    }
+    return (char *)default_ip;
+}
+
 // 线程安全日志函数，带时间戳
 void write_log(const char *fmt, ...)
 {
@@ -269,7 +291,6 @@ void handle_client_event(int fd)
         {
             printf("客户端 %s:%d (fd=%d) 已断开连接,errno=%d\n",
                    client_infos[fd].ip, client_infos[fd].port, fd, errno);
-            perror("客户端读取失败");
             struct epoll_event ev;
             epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, &ev); // 及时移除
             // 不要close(fd)，由线程池关闭
@@ -278,15 +299,28 @@ void handle_client_event(int fd)
     }
 }
 
+// 将客户端fd释放的函数
+void cfd_free(int cfd)
+{
+    struct epoll_event ev;
+    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, cfd, &ev);
+    close(cfd);
+}
+
 // 线程函数
 void *work_thread(void *arg)
 {
-    while (1)
+    while (server_running)
     {
         pthread_mutex_lock(&mutex); // 因为task_count 发生改变所以上锁
-        while (task_count == 0)
+        while (task_count == 0 && server_running)
         {
             pthread_cond_wait(&cond, &mutex);
+        }
+        if (!server_running)
+        {
+            pthread_mutex_unlock(&mutex);
+            break;
         }
 
         Task task = task_queue[--task_count]; // 结构体赋值
@@ -304,11 +338,10 @@ void *work_thread(void *arg)
                 "Bad Request";
             write(task.fd, bad_request, strlen(bad_request));
             // 在线程池 work_thread 里 close(task.fd) 前加
+            const char *real_ip = get_real_ip(task.buf, client_infos[task.fd].ip);
             write_log("客户端 %s:%d (fd=%d) 已断开连接（线程池）\n",
-                      client_infos[task.fd].ip, client_infos[task.fd].port, task.fd);
-            struct epoll_event ev;
-            epoll_ctl(epoll_fd, EPOLL_CTL_DEL, task.fd, &ev);
-            close(task.fd);
+                      real_ip, client_infos[task.fd].port, task.fd);
+            cfd_free(task.fd);
             free(task.buf); // 释放掉主线程中分配的空间
             continue;
         }
@@ -330,11 +363,10 @@ void *work_thread(void *arg)
                 "File not found";
             write(task.fd, not_found, strlen(not_found));
             // 在线程池 work_thread 里 close(task.fd) 前加
+            const char *real_ip = get_real_ip(task.buf, client_infos[task.fd].ip);
             write_log("客户端 %s:%d (fd=%d) 已断开连接（线程池）\n",
-                      client_infos[task.fd].ip, client_infos[task.fd].port, task.fd);
-            struct epoll_event ev;
-            epoll_ctl(epoll_fd, EPOLL_CTL_DEL, task.fd, &ev);
-            close(task.fd);
+                      real_ip, client_infos[task.fd].port, task.fd);
+            cfd_free(task.fd);
             free(task.buf);
             continue;
         }
@@ -345,11 +377,10 @@ void *work_thread(void *arg)
             perror("获取被请求文件信息失败");
             close(file_fd);
             // 在线程池 work_thread 里 close(task.fd) 前加
+            const char *real_ip = get_real_ip(task.buf, client_infos[task.fd].ip);
             write_log("客户端 %s:%d (fd=%d) 已断开连接（线程池）\n",
-                      client_infos[task.fd].ip, client_infos[task.fd].port, task.fd);
-            struct epoll_event ev;
-            epoll_ctl(epoll_fd, EPOLL_CTL_DEL, task.fd, &ev);
-            close(task.fd);
+                      real_ip, client_infos[task.fd].port, task.fd);
+            cfd_free(task.fd);
             free(task.buf);
             continue; // 不终止线程
         }
@@ -359,9 +390,9 @@ void *work_thread(void *arg)
 
         char response_header[512];
         int header_len = snprintf(response_header, sizeof(response_header),
-                                  "HTTP/1.1 200 OK\r\n"
-                                  "Content-Type: %s\r\n"
-                                  "Content-Length: %ld\r\n"
+                                  "HTTP/1.1 200 OK\r\n"     // HTTP 状态码（表示成功），状态码的文本描述
+                                  "Content-Type: %s\r\n"    // 媒体类型
+                                  "Content-Length: %ld\r\n" // 响应体的字节大小
                                   "Connection: close\r\n\r\n",
                                   content_type, file_stat.st_size);
 
@@ -372,11 +403,10 @@ void *work_thread(void *arg)
             perror("发送响应头失败");
             close(file_fd);
             // 在线程池 work_thread 里 close(task.fd) 前加
+            const char *real_ip = get_real_ip(task.buf, client_infos[task.fd].ip);
             write_log("客户端 %s:%d (fd=%d) 已断开连接（线程池）\n",
-                      client_infos[task.fd].ip, client_infos[task.fd].port, task.fd);
-            struct epoll_event ev;
-            epoll_ctl(epoll_fd, EPOLL_CTL_DEL, task.fd, &ev);
-            close(task.fd);
+                      real_ip, client_infos[task.fd].port, task.fd);
+            cfd_free(task.fd);
             free(task.buf);
             continue;
         }
@@ -384,7 +414,7 @@ void *work_thread(void *arg)
         // 分块发送文件内容（优化大文件传输）
         off_t offset = 0;
         size_t remaining = file_stat.st_size;
-        const size_t CHUNK_SIZE = 1 << 20; // 1MB分块 2^20B = 1MB
+        const size_t CHUNK_SIZE = 1 << 21; // 1MB分块 2^21B = 10MB
 
         while (remaining > 0)
         {
@@ -394,7 +424,7 @@ void *work_thread(void *arg)
             if (bytes_sent <= 0)
             {
                 // EWOULDBLOCK 表示“如果是阻塞IO，这次操作会阻塞；但现在是非阻塞IO，所以直接返回错误”。
-                if (errno == EAGAIN || errno == EWOULDBLOCK)
+                if (errno == EAGAIN || errno == EWOULDBLOCK) // 2.非阻塞IO操作本来会阻塞，但现在直接返回错误。
                 {
                     // 网络缓冲区满，短暂等待后重试
                     usleep(10000);
@@ -410,11 +440,10 @@ void *work_thread(void *arg)
 
         close(file_fd);
         // 在线程池 work_thread 里 close(task.fd) 前加
+        const char *real_ip = get_real_ip(task.buf, client_infos[task.fd].ip);
         write_log("客户端 %s:%d (fd=%d) 已断开连接（线程池）\n",
-                  client_infos[task.fd].ip, client_infos[task.fd].port, task.fd);
-        struct epoll_event ev;
-        epoll_ctl(epoll_fd, EPOLL_CTL_DEL, task.fd, &ev);
-        close(task.fd);
+                  real_ip, client_infos[task.fd].port, task.fd);
+        cfd_free(task.fd);
         free(task.buf);
     }
     return NULL;
