@@ -10,145 +10,22 @@ void bind_check(int re);
 void listen_check(int re);
 // 检查epoll问价描述符是否成功创建
 void epollcreate_check();
-// 检查opollwait是否出错
+// 检查epollwait是否出错
 void epollwait_check(int evnum);
 // 根据文件扩展名获取Content-Type
 const char *get_content_type(const char *filename);
 // 解析HTTP请求，获取请求的文件路径
 int parse_http_request(const char *request, char *filename, size_t max_len);
-
+// 线程安全日志函数，带时间戳
+void write_log(const char *fmt, ...);
+// 添加任务函数并激活线程
+void add_task(int fd, char *buf, int len);
+// 客户端处理函数
+void handle_client_event(int fd);
 // 线程函数
-void *work_thread(void *arg)
-{
-    while (1)
-    {
-        pthread_mutex_lock(&mutex); // 因为task_count 发生改变所以上锁
-        while (task_count == 0)
-        {
-            pthread_cond_wait(&cond, &mutex);
-        }
+void *work_thread(void *arg);
 
-        Task task = task_queue[--task_count]; // 结构体赋值
-        pthread_mutex_unlock(&mutex);
-
-        // 解析HTTP请求
-        char filename[256] = {0};
-        if (parse_http_request(task.buf, filename, sizeof(filename)) != 0)
-        {
-            const char *bad_request =
-                "HTTP/1.1 400 Bad Request\r\n"
-                "Content-Type: text/plain\r\n"
-                "Content-Length: 15\r\n"
-                "Connection: close\r\n\r\n"
-                "Bad Request";
-            write(task.fd, bad_request, strlen(bad_request));
-            close(task.fd);
-            free(task.buf); // 释放掉主线程中分配的空间
-            continue;
-        }
-
-        char fullpath[512] = {0};
-        snprintf(fullpath, sizeof(fullpath), "%s", filename);
-
-        int file_fd = open(fullpath, O_RDONLY);
-        if (file_fd == -1)
-        {
-            perror("open failed"); // 添加详细错误输出
-            printf("尝试打开的文件路径: %s\n", fullpath);
-            // ... 返回404 ...
-            const char *not_found =
-                "HTTP/1.1 404 Not Found\r\n"
-                "Content-Type: text/plain\r\n"
-                "Content-Length: 13\r\n"
-                "Connection: close\r\n\r\n"
-                "File not found";
-            write(task.fd, not_found, strlen(not_found));
-            close(task.fd);
-            free(task.buf);
-            continue;
-        }
-
-        struct stat file_stat;
-        if (fstat(file_fd, &file_stat) == -1)
-        {
-            perror("获取被请求文件信息失败");
-            close(file_fd);
-            close(task.fd);
-            free(task.buf);
-            continue; // 不终止线程
-        }
-
-        // 获取Content-Type
-        const char *content_type = get_content_type(filename);
-
-        char response_header[512];
-        int header_len = snprintf(response_header, sizeof(response_header),
-                                  "HTTP/1.1 200 OK\r\n"
-                                  "Content-Type: %s\r\n"
-                                  "Content-Length: %ld\r\n"
-                                  "Connection: close\r\n\r\n",
-                                  content_type, file_stat.st_size);
-
-        // 发送响应头
-        ssize_t sent = write(task.fd, response_header, header_len);
-        if (sent != header_len)
-        {
-            perror("发送响应头失败");
-            close(file_fd);
-            close(task.fd);
-            free(task.buf);
-            continue;
-        }
-
-        // 分块发送文件内容（优化大文件传输）
-        off_t offset = 0;
-        size_t remaining = file_stat.st_size;
-        const size_t CHUNK_SIZE = 1 << 20; // 1MB分块 2^20B = 1MB
-
-        while (remaining > 0)
-        {
-            size_t send_size = MIN(CHUNK_SIZE, remaining);                       // 本次要发送的大小
-            ssize_t bytes_sent = sendfile(task.fd, file_fd, &offset, send_size); // 实际发送大小
-
-            if (bytes_sent <= 0)
-            {
-                // EWOULDBLOCK 表示“如果是阻塞IO，这次操作会阻塞；但现在是非阻塞IO，所以直接返回错误”。
-                if (errno == EAGAIN || errno == EWOULDBLOCK)
-                {
-                    // 网络缓冲区满，短暂等待后重试
-                    usleep(10000);
-                    printf("文件发送失败，再次尝试.....\n");
-                    continue;
-                }
-                printf("文件发送失败\n");
-                break;
-            }
-
-            remaining -= bytes_sent;
-        }
-
-        close(file_fd);
-        close(task.fd);
-        free(task.buf);
-    }
-    return NULL;
-}
-
-void add_task(int fd, char *buf, int len)
-{
-    pthread_mutex_lock(&mutex);
-    if (task_count < 1024)
-    {
-        // 直接保存主线程传进来的buf指针
-        task_queue[task_count].fd = fd;
-        task_queue[task_count].buf = buf;
-        task_queue[task_count].len = len;
-        task_count++;
-        pthread_cond_signal(&cond);
-    }
-    pthread_mutex_unlock(&mutex);
-}
-
+// 主函数
 int main(int argc, char const *argv[])
 {
     // 初始服务器套接字
@@ -167,7 +44,7 @@ int main(int argc, char const *argv[])
     bind_check(bind(server_fd, (struct sockaddr *)&addr, sizeof(addr)));
 
     // 监听
-    listen_check(listen(server_fd, 4096));
+    listen_check(listen(server_fd, LISTENMAX));
     printf("服务器在%d端口上启动.....\n", PROT);
 
     // 建立线程池来实现多线程
@@ -193,7 +70,7 @@ int main(int argc, char const *argv[])
     struct epoll_event evs[MAXEVENTS];
     while (1)
     {
-        int events_num = epoll_wait(epoll_fd, evs, MAXEVENTS, -1);
+        int events_num = epoll_wait(epoll_fd, evs, MAXEVENTS, -1); // 阻塞等待
         epollwait_check(events_num);
         for (int i = 0; i < events_num; i++)
         {
@@ -202,11 +79,24 @@ int main(int argc, char const *argv[])
             {
                 // 服务端只要建立连接即可
                 struct sockaddr_in caddr;
-                caddr.sin_family = AF_INET;
                 socklen_t c_len = sizeof(caddr);
                 int c_fd = accept(server_fd, (struct sockaddr *)&caddr, &c_len);
-                fcntl(c_fd, F_SETFL, O_NONBLOCK); // 必须设置为非阻塞！
-                printf("新的客户端连接%s:%d\n", inet_ntoa(caddr.sin_addr), htons(caddr.sin_port));
+                // 检查accept是否成功连接
+                if (c_fd == -1)
+                {
+                    if (errno == EAGAIN || errno == EWOULDBLOCK)
+                        break;
+                    perror("accept 失败");
+                    break;
+                }
+                fcntl(c_fd, F_SETFL, O_NONBLOCK); // 必须设置为非阻塞IO
+                write_log("新的客户端%d连接%s:%d\n", c_fd, inet_ntoa(caddr.sin_addr), htons(caddr.sin_port));
+                // 由于 X-Forwarded-For 只在 HTTP 请求头里，accept 阶段还拿不到
+                // 所以这里只能记录代理的IP（如127.0.0.1），无法直接获得真实IP
+                // 保存客户端信息
+                client_infos[c_fd].fd = c_fd;
+                strcpy(client_infos[c_fd].ip, inet_ntoa(caddr.sin_addr));
+                client_infos[c_fd].port = ntohs(caddr.sin_port);
                 // 将产生的客户端文件描述符加入epoll实例
                 struct epoll_event ev;
                 ev.events = EPOLLIN | EPOLLET;
@@ -215,41 +105,22 @@ int main(int argc, char const *argv[])
             }
             else
             {
-                // 客户端
-                // 边缘触发模式必须循环读取！
-                while (1)
-                {
-                    char buf[BUFSIZE]; // 改为栈上分配，避免内存管理问题
-                    int n = read(fd, buf, BUFSIZE);
-                    if (n > 0)
-                    {
-                        char *task_buf = malloc(n); // 分配新内存将内容传给线程
-                        memcpy(task_buf, buf, n);
-                        add_task(fd, task_buf, n);
-                    }
-                    else if (n == 0)
-                    {
-                        close(fd);
-                        break;
-                    }
-                    else if (errno == EAGAIN)
-                    {
-                        break; // ET模式下数据已读完
-                    }
-                    else
-                    {
-                        perror("客户端读取失败\n");
-                        close(fd);
-                        break;
-                    }
-                }
+                // 客户端事件处理函数
+                handle_client_event(fd);
             }
         }
     }
 
     // 关闭服务器
-
     close(epoll_fd);
     close(server_fd);
+    // 清理线程池
+    server_running = 0;
+    pthread_cond_broadcast(&cond);
+    for (int i = 0; i < PTHREADMAX; i++)
+    {
+        pthread_join(pthreadpools[i], NULL);
+    }
+
     return EXIT_SUCCESS;
 }
